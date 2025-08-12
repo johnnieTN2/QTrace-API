@@ -1,13 +1,3 @@
-'''
-Filename:  main.py
-
-@app.get("/")  # Root endpoint - welcome message
-@app.get("/health")  # Health check endpoint  
-@app.get("/items/")  # Get ALL items (with filtering/pagination)
-@app.get("/items/{item_id}")  # Get ONE specific item by ID
-
-
-'''
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -20,38 +10,8 @@ from .models import Item
 from .schemas import ItemCreate, ItemUpdate, ItemResponse
 from . import crud
 
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Lifespan event handler for startup and shutdown tasks.
-    This replaces the deprecated @app.on_event("startup") decorator.
-    """
-    # Startup tasks
-    print("🚀 Starting Item Tracker API...")
-    
-    # Test database connection
-    if test_connection():
-        print("📊 Database connection verified")
-        
-        # Create tables (will only create if they don't exist)
-        if create_tables():
-            print("📋 Database tables ready")
-        else:
-            print("⚠️  Warning: Table creation had issues")
-    else:
-        print("⚠️  Warning: Database connection failed during startup")
-    
-    yield  # This is where the app runs
-    
-    # Shutdown tasks (if needed in future)
-    print("🛑 Shutting down Item Tracker API...")
-
-
-# Create FastAPI app instance with lifespan handler
+# Create FastAPI app instance
 app = FastAPI(title="QTrace API", description="Item tracking system", version="1.0.0")
-
 
 # Add CORS middleware
 app.add_middleware(
@@ -65,9 +25,10 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     try:
+        print("🚀 Starting QTrace API...")
         if test_connection():
             create_tables()
-            print("🚀 QTrace API started successfully!")
+            print("✅ QTrace API started successfully!")
         else:
             print("⚠️ Starting without database connection")
     except Exception as e:
@@ -76,7 +37,11 @@ async def startup_event():
 
 @app.get("/")
 def read_root():
-    return {"message": "QTrace API is running!"}
+    return {"message": "QTrace API is running!", "status": "healthy"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "service": "QTrace API"}
 
 @app.post("/items/", response_model=ItemResponse)
 def create_item(item: ItemCreate, db: Session = Depends(get_db)):

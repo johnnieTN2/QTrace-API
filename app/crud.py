@@ -8,7 +8,8 @@ def get_items(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Item).offset(skip).limit(limit).all()
 
 def create_item(db: Session, item: schemas.ItemCreate):
-    db_item = models.Item(**item.dict())
+    # Use model_dump() instead of dict() for Pydantic v2
+    db_item = models.Item(**item.model_dump())
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
@@ -17,7 +18,8 @@ def create_item(db: Session, item: schemas.ItemCreate):
 def update_item(db: Session, item_id: int, item: schemas.ItemUpdate):
     db_item = db.query(models.Item).filter(models.Item.id == item_id).first()
     if db_item:
-        update_data = item.dict(exclude_unset=True)
+        # Use model_dump() instead of dict() for Pydantic v2
+        update_data = item.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_item, field, value)
         db.commit()
