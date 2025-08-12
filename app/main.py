@@ -64,8 +64,15 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    test_connection()
-    create_tables()
+    try:
+        if test_connection():
+            create_tables()
+            print("🚀 QTrace API started successfully!")
+        else:
+            print("⚠️ Starting without database connection")
+    except Exception as e:
+        print(f"⚠️ Startup error: {e}")
+        # Don't crash the app, just log the error
 
 @app.get("/")
 def read_root():
