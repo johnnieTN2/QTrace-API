@@ -1,0 +1,17 @@
+# FastAPI and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+
+# Data validation
+pydantic==2.5.0
+
+# Environment variables
+python-dotenv==1.0.0
+
+# Development tools (optional)
+pytest==7.4.3
+httpx==0.25.2  # For testing FastAPI endpoints
