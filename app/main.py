@@ -8,15 +8,18 @@ Filename:  main.py
 
 
 '''
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import test_connection, create_tables, get_db
-from models import Item
-from schema import ItemCreate, ItemUpdate, ItemResponse, ItemList
-from crud import get_item, get_items, create_item, update_item, delete_item
+from typing import List
 import uvicorn
-import math
+
+# Fix these imports to use relative imports
+from .database import test_connection, create_tables, get_db
+from .models import Item
+from .schemas import ItemCreate, ItemUpdate, ItemResponse
+from . import crud
+
 
 
 @asynccontextmanager
@@ -47,99 +50,56 @@ async def lifespan(app: FastAPI):
 
 
 # Create FastAPI app instance with lifespan handler
-app = FastAPI(
-    title="Item Tracker API",
-    description="A personal item tracking system",
-    version="1.0.0",
-    lifespan=lifespan
+app = FastAPI(title="QTrace API", description="Item tracking system", version="1.0.0")
+
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure this properly for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-@app.get("/")
-async def root():
-    """Root endpoint - API welcome message"""
-    return {
-        "message": "Welcome to Item Tracker API!",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "models": "Item model loaded"
-    }
+@app.on_event("startup")
+async def startup_event():
+    test_connection()
+    create_tables()
 
-@app.get("/health")
-async def health_check():
-    """
-    Health check endpoint that includes database connectivity status.
-    Useful for monitoring and deployment health checks.
-    """
-    db_status = test_connection()
-    return {
-        "status": "healthy" if db_status else "degraded",
-        "database": "connected" if db_status else "disconnected",
-        "api": "running",
-        "models": "Item model available"
-    }
+@app.get("/")
+def read_root():
+    return {"message": "QTrace API is running!"}
 
 @app.post("/items/", response_model=ItemResponse)
-async def create_new_item(item: ItemCreate, db: Session = Depends(get_db)):
-    """Create a new item"""
-    try:
-        db_item = create_item(db=db, item=item)
-        return db_item
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error creating item: {str(e)}")
-    
-@app.get("/items/", response_model=ItemList)
-async def read_items(
-    skip: int = Query(0, ge=0, description="Number of items to skip"),
-    limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
-    search: str = Query(None, description="Search items by name"),
-    status: str = Query(None, description="Filter by status"),
-    category: str = Query(None, description="Filter by category"),
-    location: str = Query(None, description="Filter by location"),
-    db: Session = Depends(get_db)
-):
-    """Get all items with optional filtering and pagination"""
-    items, total = get_items(
-        db=db, skip=skip, limit=limit, 
-        search=search, status=status, category=category, location=location
-    )
-    
-    pages = math.ceil(total / limit) if total > 0 else 1
-    page = (skip // limit) + 1
-    
-    return ItemList(
-        items=items,
-        total=total,
-        page=page,
-        per_page=limit,
-        pages=pages
-    )
+def create_item(item: ItemCreate, db: Session = Depends(get_db)):
+    return crud.create_item(db=db, item=item)
+
+@app.get("/items/", response_model=List[ItemResponse])
+def read_items(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    items = crud.get_items(db, skip=skip, limit=limit)
+    return items
 
 @app.get("/items/{item_id}", response_model=ItemResponse)
-async def read_item(item_id: int, db: Session = Depends(get_db)):
-    """Get a single item by ID"""
-    db_item = get_item(db=db, item_id=item_id)
+def read_item(item_id: int, db: Session = Depends(get_db)):
+    db_item = crud.get_item(db, item_id=item_id)
     if db_item is None:
         raise HTTPException(status_code=404, detail="Item not found")
     return db_item
 
 @app.put("/items/{item_id}", response_model=ItemResponse)
-async def update_existing_item(item_id: int, item_update: ItemUpdate, db: Session = Depends(get_db)):
-    """Update an existing item"""
-    db_item = update_item(db=db, item_id=item_id, item_update=item_update)
+def update_item(item_id: int, item: ItemUpdate, db: Session = Depends(get_db)):
+    db_item = crud.update_item(db, item_id=item_id, item=item)
     if db_item is None:
         raise HTTPException(status_code=404, detail="Item not found")
     return db_item
 
 @app.delete("/items/{item_id}")
-async def delete_existing_item(item_id: int, db: Session = Depends(get_db)):
-    """Delete an item"""
-    success = delete_item(db=db, item_id=item_id)
+def delete_item(item_id: int, db: Session = Depends(get_db)):
+    success = crud.delete_item(db, item_id=item_id)
     if not success:
         raise HTTPException(status_code=404, detail="Item not found")
     return {"message": "Item deleted successfully"}
 
-
-
-# Change the uvicorn run line at bottom
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
